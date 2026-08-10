@@ -351,7 +351,14 @@ func (a *App) WebhookHandler(r *fastglue.Request) error {
 					"status", status.Status,
 				)
 
-				go a.processStatusUpdate(phoneNumberID, status)
+				// Tracked so in-flight status callbacks are awaited on shutdown, and
+			// so the callback dispatcher never grows the WaitGroup from zero
+			// while WaitForBackgroundTasks is already waiting.
+			a.wg.Add(1)
+			go func(s WebhookStatus) {
+				defer a.wg.Done()
+				a.processStatusUpdate(phoneNumberID, s)
+			}(status)
 			}
 		}
 	}
@@ -426,6 +433,7 @@ func (a *App) updateMessageStatus(whatsappMsgID, statusValue string, errors []We
 	}
 
 	newStatus := models.MessageStatus(statusValue)
+	previousStatus := message.Status
 	currentPriority := statusPriority(message.Status)
 	newPriority := statusPriority(newStatus)
 
@@ -472,6 +480,22 @@ func (a *App) updateMessageStatus(whatsappMsgID, statusValue string, errors []We
 	}
 
 	a.Log.Info("Updated message status", "message_id", message.ID, "status", statusValue)
+
+	// Notify the caller-supplied status callback about delivered / read / failed.
+	// "sent" is already reported by the send path, so it is not repeated here.
+	// Meta redelivers status webhooks, and the progression guard above lets a
+	// repeated "failed" through, so only fire when the status actually changed.
+	if newStatus != models.MessageStatusSent && newStatus != previousStatus {
+		if callbackURL, _ := messageStatusCallbackTarget(message.Metadata); callbackURL != "" {
+			var contact *models.Contact
+			var loaded models.Contact
+			if err := a.DB.Where("id = ?", message.ContactID).First(&loaded).Error; err == nil {
+				contact = &loaded
+			}
+			errText, _ := updates["error_message"].(string)
+			a.dispatchMessageStatusCallback(&message, contact, newStatus, whatsappMsgID, errText)
+		}
+	}
 
 	// Update campaign stats and recipient status if this is a campaign message
 	if message.Metadata != nil {

@@ -2673,46 +2673,7 @@ func (a *App) handleTemplateButtonResponseCallback(account *models.WhatsAppAccou
 }
 
 func (a *App) sendTemplateButtonCallback(callbackURL, bearerToken string, payload templateButtonCallbackPayload) models.JSONB {
-	result := models.JSONB{
-		"url":        callbackURL,
-		"sent_at":    time.Now().Format(time.RFC3339Nano),
-		"successful": false,
-	}
-
-	body, err := json.Marshal(payload)
-	if err != nil {
-		result["error"] = err.Error()
-		return result
-	}
-
-	client := a.HTTPClient
-	if client == nil {
-		client = http.DefaultClient
-	}
-	req, err := http.NewRequest(http.MethodPost, callbackURL, bytes.NewReader(body))
-	if err != nil {
-		result["error"] = err.Error()
-		return result
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if bearerToken != "" {
-		req.Header.Set("Authorization", "Bearer "+bearerToken)
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		result["error"] = err.Error()
-		return result
-	}
-	defer resp.Body.Close()
-	result["status_code"] = resp.StatusCode
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		result["successful"] = true
-	} else {
-		limitedBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		result["error"] = strings.TrimSpace(string(limitedBody))
-	}
-	return result
+	return a.postJSONCallback(callbackURL, bearerToken, payload)
 }
 
 func lookupButtonPayload(metadata models.JSONB, buttonID, buttonText string) string {

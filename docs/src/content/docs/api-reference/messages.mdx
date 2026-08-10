@@ -141,7 +141,7 @@ POST /api/messages/external
 ### External Template Example
 
 ```bash
-curl -X POST "http://your-server:8080/api/messages/external" \
+curl -X POST "https://your-whatomate-server/api/messages/external" \
   -H "X-API-Key: whm_your_api_key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -179,13 +179,15 @@ POST /api/messages/template
 | `template_id` | string | One of template_name or template_id | UUID of the template |
 | `template_params` | object | No | Named or positional parameters |
 | `account_name` | string | No | Specific WhatsApp account to use |
+| `status_callback_url` | string | No | URL that receives delivery status updates for this message (`sent`, `delivered`, `read`, `failed`) |
+| `status_callback_bearer_token` | string | No | Sent back as `Authorization: Bearer <token>` on every status callback |
 
 ### Examples
 
 **Using phone number (creates contact if needed):**
 
 ```bash
-curl -X POST "http://your-server:8080/api/messages/template" \
+curl -X POST "https://your-whatomate-server/api/messages/template" \
   -H "X-API-Key: whm_your_api_key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -206,7 +208,7 @@ curl -X POST "http://your-server:8080/api/messages/template" \
 If an external system wants Whatomate to send the template directly, this is the simplest contract:
 
 ```bash
-curl -X POST "http://your-server:8080/api/messages/template" \
+curl -X POST "https://your-whatomate-server/api/messages/template" \
   -H "X-API-Key: whm_your_api_key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -230,7 +232,7 @@ Notes:
 **With template header media URL:**
 
 ```bash
-curl -X POST "http://your-server:8080/api/messages/template" \
+curl -X POST "https://your-whatomate-server/api/messages/template" \
   -H "X-API-Key: whm_your_api_key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -279,13 +281,23 @@ If your template has placeholders like `Hello {{name}}, your order {{order_id}} 
 {
   "status": "success",
   "data": {
-    "message_id": "uuid",
-    "phone_number": "919876543210",
+    "id": "uuid",
+    "contact_id": "uuid",
+    "direction": "outgoing",
+    "message_type": "template",
+    "content": {
+      "body": "Hello John, your order 12345 is ready"
+    },
     "status": "pending",
-    "template_name": "order_confirmation"
+    "is_reply": false,
+    "whatsapp_account": "primary",
+    "created_at": "2026-03-27T10:30:00Z",
+    "updated_at": "2026-03-27T10:30:00Z"
   }
 }
 ```
+
+`"status": "pending"` means the request was accepted and queued — not that the message has been sent. Store the returned `id`: it is the `message_id` in every status callback.
 
 <Aside type="tip">
   When using `phone_number`, a new contact is automatically created if one doesn't exist for that number.
@@ -294,6 +306,149 @@ If your template has placeholders like `Hello {{name}}, your order {{order_id}} 
 <Aside type="caution">
   If required template parameters are missing, you'll receive an error:
   `"Missing template parameters: name, order_id. Expected parameters: [name, order_id]"`
+</Aside>
+
+### Delivery Status Callback
+
+The response above confirms only that the request was accepted — `"status": "pending"` means queued, not sent. Supply `status_callback_url` if the calling system needs to know what actually happened to the message.
+
+```bash
+curl -X POST "https://your-whatomate-server/api/messages/template" \
+  -H "X-API-Key: whm_your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "phone_number": "919876543210",
+    "template_name": "order_confirmation",
+    "template_params": { "name": "John", "order_id": "12345" },
+    "status_callback_url": "https://billing.example.com/api/whatsapp-status",
+    "status_callback_bearer_token": "your-secret-token"
+  }'
+```
+
+Whatomate then POSTs this body to that URL every time the status changes:
+
+```json
+{
+  "message_id": "12415f80-1d08-4c17-9030-08302bdf37a6",
+  "whatsapp_message_id": "wamid.HBgMOTE5ODc2NTQzMjEwFQIAERgS",
+  "status": "sent",
+  "contact_id": "4c0a7f45-7d2f-4a7f-9a3c-1b0f6c4e5e20",
+  "contact_phone": "919876543210",
+  "contact_name": "Nitin Jain",
+  "whatsapp_account": "Main Account",
+  "template_name": "order_confirmation",
+  "timestamp": "2026-06-09T10:30:00Z"
+}
+```
+
+Only `message_id`, `status` and `timestamp` are always present. Any other field is omitted when Whatomate has no value for it — notably `error_message` (only on `failed`), `whatsapp_message_id` (missing when the send failed before WhatsApp accepted it), and `contact_name` (missing for an auto-created contact whose profile name is unknown). `timestamp` is UTC.
+
+| Status | Meaning |
+|--------|---------|
+| `sent` | WhatsApp accepted the message. Not proof of delivery. |
+| `delivered` | The message reached the recipient's device. |
+| `read` | The recipient opened the message. Only reported when the recipient has read receipts enabled. |
+| `failed` | The message did not go out, or WhatsApp rejected it after accepting it. `error_message` explains why. |
+
+Notes:
+
+- Both fields are optional. Omit them and no callbacks are sent.
+- `status_callback_url` must be an absolute `http://` or `https://` URL, otherwise the request is rejected with `400`.
+- Your endpoint must be reachable from the public internet. Whatomate refuses to call private or internal addresses (`localhost`, `127.0.0.1`, `10.x`, `192.168.x`, `*.internal`, `*.local`); such a URL is accepted at send time but every callback to it fails.
+- `pending` is never sent as a callback.
+- Statuses only move forward, and each is normally sent once — make your endpoint idempotent, since WhatsApp can repeat its own notifications. `failed` can arrive after `sent` or `delivered`.
+- Reply with any `2xx`. A non-`2xx` is logged and never retried; in-flight callbacks are lost if Whatomate restarts.
+- The token is stored with the message so late `delivered`/`read` callbacks can still be authenticated — rotating it affects new sends only.
+- Callbacks are best effort: failures are logged, not retried, and never affect the WhatsApp message.
+- Validation errors (missing template, bad parameters) are returned on the original request; no callback is sent because no message was created.
+- For multipart requests, send both values as ordinary text form fields.
+
+<Aside type="caution">
+  `sent` is not the same as delivered. A message can be reported `sent` and then turn `failed` minutes later — invalid number, blocked business, or an expired messaging window. Treat `delivered` as the first proof the message actually arrived.
+</Aside>
+
+## Check Message Status
+
+Because status callbacks are never retried, you can also ask for the current status at any time. Use this when a callback did not arrive, after your own system was down, or as a periodic reconciliation. It works for every message, including ones sent without a `status_callback_url`.
+
+### One message
+
+```bash
+GET /api/messages/{id}/status
+```
+
+`{id}` accepts either the Whatomate message UUID or the WhatsApp message ID (`wamid...`).
+
+```bash
+curl "https://your-whatomate-server/api/messages/12415f80-1d08-4c17-9030-08302bdf37a6/status" \
+  -H "X-API-Key: whm_your_api_key"
+```
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message_id": "12415f80-1d08-4c17-9030-08302bdf37a6",
+    "whatsapp_message_id": "wamid.HBgMOTE5ODc2NTQzMjEwFQIAERgS",
+    "status": "delivered",
+    "contact_id": "4c0a7f45-7d2f-4a7f-9a3c-1b0f6c4e5e20",
+    "contact_phone": "919876543210",
+    "contact_name": "Nitin Jain",
+    "whatsapp_account": "Main Account",
+    "template_name": "credentials_v1",
+    "direction": "outgoing",
+    "created_at": "2026-06-09T10:30:00Z",
+    "updated_at": "2026-06-09T10:30:04Z"
+  }
+}
+```
+
+Field names match the status callback body exactly, so one parser handles both. `status` can additionally be `pending` here, meaning the message has not left Whatomate yet.
+
+### Several messages
+
+```bash
+POST /api/messages/status
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `message_ids` | string[] | One of the two | Whatomate message UUIDs |
+| `whatsapp_message_ids` | string[] | One of the two | WhatsApp message IDs (`wamid...`) |
+
+Up to 100 IDs per call, and the two lists may be mixed.
+
+```bash
+curl -X POST "https://your-whatomate-server/api/messages/status" \
+  -H "X-API-Key: whm_your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message_ids": ["12415f80-1d08-4c17-9030-08302bdf37a6"],
+    "whatsapp_message_ids": ["wamid.HBgMOTE5ODc2NTQzMjEwFQIAERgS"]
+  }'
+```
+
+Unknown IDs are returned in `not_found` rather than failing the request:
+
+```json
+{
+  "status": "success",
+  "data": {
+    "statuses": [{ "message_id": "12415f80-1d08-4c17-9030-08302bdf37a6", "status": "delivered" }],
+    "not_found": ["wamid.HBgMOTE5ODc2NTQzMjEwFQIAERgS"]
+  }
+}
+```
+
+Notes:
+
+- Duplicate IDs are returned once.
+- More than 100 IDs returns `400`; neither list supplied returns `400`.
+- Results are scoped to your own organization — anything else is reported as not found.
+- An unknown ID on the single-message endpoint returns `404 Message not found`.
+
+<Aside type="tip">
+  Use callbacks as the normal path and lookups as the safety net. Polling every message on a timer adds load for no benefit — look up only what you never heard about.
 </Aside>
 
 ## Send Media Message
@@ -350,7 +505,7 @@ POST /api/contacts/{id}/messages
 Send a message with up to 3 quick reply buttons:
 
 ```bash
-curl -X POST "http://your-server:8080/api/contacts/{contact_id}/messages" \
+curl -X POST "https://your-whatomate-server/api/contacts/{contact_id}/messages" \
   -H "X-API-Key: whm_your_api_key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -385,7 +540,7 @@ curl -X POST "http://your-server:8080/api/contacts/{contact_id}/messages" \
 Send a message with a call-to-action URL button:
 
 ```bash
-curl -X POST "http://your-server:8080/api/contacts/{contact_id}/messages" \
+curl -X POST "https://your-whatomate-server/api/contacts/{contact_id}/messages" \
   -H "X-API-Key: whm_your_api_key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -458,7 +613,7 @@ Messages go through the following status flow:
 | `failed` | Message failed to send |
 
 <Aside type="note">
-  Status updates are delivered via webhooks in real-time. Configure your webhook endpoint to receive these updates.
+  Organisation webhooks fire on `message.sent` only. To receive `delivered`, `read`, and `failed` for a specific message, send `status_callback_url` with the send request — see [Delivery Status Callback](#delivery-status-callback) above.
 </Aside>
 
 ## Message Types
