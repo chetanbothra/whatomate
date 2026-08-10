@@ -683,6 +683,8 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.POST("/api/messages/external", app.CreateExternalMessage)
 	g.POST("/api/messages/template", app.SendTemplateMessage)
 	g.POST("/api/messages/media", app.SendMediaMessage)
+	g.POST("/api/messages/status", app.BatchMessageStatus)
+	g.GET("/api/messages/{id}/status", app.GetMessageStatus)
 	g.PUT("/api/messages/{id}/read", app.MarkMessageRead)
 
 	// Conversation Notes

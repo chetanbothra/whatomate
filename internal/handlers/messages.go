@@ -68,6 +68,11 @@ type OutgoingMessageRequest struct {
 	ResponseCallbackURL         string
 	ResponseCallbackBearerToken string
 
+	// Delivery status callback (optional). When set, Whatomate POSTs every
+	// status change of this message (sent, delivered, read, failed) to the URL.
+	StatusCallbackURL         string
+	StatusCallbackBearerToken string
+
 	// WhatsApp Flow messages
 	FlowID          string // Meta Flow ID
 	FlowHeader      string // Optional header text for flow
@@ -327,6 +332,19 @@ func (a *App) createOutgoingMessage(req OutgoingMessageRequest, opts MessageSend
 		}
 	}
 
+	// Persist the delivery status callback config (applies to every message type).
+	// Stored on the message because status updates from Meta (delivered / read /
+	// failed) arrive long after the send call has returned.
+	if strings.TrimSpace(req.StatusCallbackURL) != "" {
+		if msg.Metadata == nil {
+			msg.Metadata = models.JSONB{}
+		}
+		msg.Metadata[metaKeyStatusCallbackURL] = strings.TrimSpace(req.StatusCallbackURL)
+		if req.StatusCallbackBearerToken != "" {
+			msg.Metadata[metaKeyStatusCallbackToken] = req.StatusCallbackBearerToken
+		}
+	}
+
 	// Handle reply context
 	if req.ReplyToMessage != nil {
 		msg.IsReply = true
@@ -445,6 +463,9 @@ func (a *App) finalizeMessageSend(msg *models.Message, req OutgoingMessageReques
 		})
 		a.Log.Error("Failed to send message", "error", err, "message_id", msg.ID, "type", msg.MessageType)
 
+		// Notify the caller-supplied status callback that the send failed
+		a.dispatchMessageStatusCallback(msg, req.Contact, models.MessageStatusFailed, "", errMsg)
+
 		// Broadcast failure status via WebSocket so frontend updates immediately
 		if opts.BroadcastWebSocket && a.WSHub != nil {
 			a.WSHub.BroadcastToOrg(req.Account.OrganizationID, websocket.WSMessage{
@@ -465,6 +486,9 @@ func (a *App) finalizeMessageSend(msg *models.Message, req OutgoingMessageReques
 		"whats_app_message_id": wamid,
 	})
 	a.Log.Info("Message sent", "message_id", msg.ID, "wa_message_id", wamid, "type", msg.MessageType)
+
+	// Notify the caller-supplied status callback that WhatsApp accepted the message
+	a.dispatchMessageStatusCallback(msg, req.Contact, models.MessageStatusSent, wamid, "")
 
 	// Dispatch webhook for successful send
 	if opts.DispatchWebhook {
@@ -639,6 +663,12 @@ type SendTemplateMessageRequest struct {
 	ResponseCallbackURL         string            `json:"response_callback_url"`
 	ResponseCallbackBearerToken string            `json:"response_callback_bearer_token"`
 
+	// Optional delivery status callback. When supplied, Whatomate POSTs the
+	// status of this message (sent, delivered, read, failed) to this URL as it
+	// changes. Omit both fields to keep the previous fire-and-forget behaviour.
+	StatusCallbackURL         string `json:"status_callback_url"`
+	StatusCallbackBearerToken string `json:"status_callback_bearer_token"`
+
 	// Header media for templates with IMAGE/VIDEO/DOCUMENT headers.
 	// Three options (in priority order):
 	//   1. header_media_id  — pre-uploaded WhatsApp media ID (skip upload)
@@ -692,6 +722,12 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 		if v := form.Value["response_callback_bearer_token"]; len(v) > 0 {
 			req.ResponseCallbackBearerToken = v[0]
 		}
+		if v := form.Value["status_callback_url"]; len(v) > 0 {
+			req.StatusCallbackURL = v[0]
+		}
+		if v := form.Value["status_callback_bearer_token"]; len(v) > 0 {
+			req.StatusCallbackBearerToken = v[0]
+		}
 		// Parse template_params from JSON string
 		if v := form.Value["template_params"]; len(v) > 0 && v[0] != "" {
 			if err := json.Unmarshal([]byte(v[0]), &req.TemplateParams); err != nil {
@@ -736,6 +772,11 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 	// Must have either contact_id or phone_number
 	if req.ContactID == "" && req.PhoneNumber == "" {
 		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, "Either contact_id or phone_number is required", nil, "")
+	}
+
+	// Reject an unusable status callback URL up front rather than failing silently later
+	if err := validateCallbackURL("status_callback_url", req.StatusCallbackURL); err != nil {
+		return r.SendErrorEnvelope(fasthttp.StatusBadRequest, err.Error(), nil, "")
 	}
 
 	// Must have either template_name or template_id
@@ -936,6 +977,8 @@ func (a *App) SendTemplateMessage(r *fastglue.Request) error {
 		MediaFilename:               req.HeaderMediaFilename,
 		ResponseCallbackURL:         req.ResponseCallbackURL,
 		ResponseCallbackBearerToken: req.ResponseCallbackBearerToken,
+		StatusCallbackURL:           req.StatusCallbackURL,
+		StatusCallbackBearerToken:   req.StatusCallbackBearerToken,
 	}
 
 	opts := DefaultSendOptions()

@@ -74,6 +74,16 @@ X-Organization-ID: 7d35e1f1-7b90-4b6c-8e70-6ef6a0e1c123
 Content-Type: application/json
 ```
 
+## Base URL
+
+This document does not contain your server address. Examples below use the placeholder:
+
+```text
+https://your-whatomate-server
+```
+
+Replace it with the address of the Whatomate installation you are integrating with. If you do not know it, ask the team that runs Whatomate — do not guess. `http://localhost:8080` only works when your code runs on the same machine as Whatomate.
+
 ## Endpoint
 
 ```http
@@ -358,7 +368,7 @@ Common failures:
 ## cURL Example
 
 ```bash
-curl -X POST "http://localhost:8080/api/messages/external" \
+curl -X POST "https://your-whatomate-server/api/messages/external" \
   -H "X-API-Key: whm_your_api_key" \
   -H "Content-Type: application/json" \
   -d '{
