@@ -388,6 +388,7 @@ type Contact struct {
 	Metadata           JSONB      `gorm:"type:jsonb;default:'{}'" json:"metadata"`
 	LastInboundAt      *time.Time `json:"last_inbound_at,omitempty"` // When customer last sent a message (for 24h window tracking)
 	IsActive           bool       `gorm:"default:true" json:"is_active"`
+	MarketingOptOut    bool       `gorm:"default:false" json:"marketing_opt_out"`
 
 	// Chatbot SLA tracking
 	ChatbotLastMessageAt *time.Time `json:"chatbot_last_message_at,omitempty"` // When chatbot last sent a message

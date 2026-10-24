@@ -61,6 +61,9 @@ const (
 
 	// Call permission types
 	TypeCallPermissionUpdate = "call_permission_update"
+
+	// Lead Ads types
+	TypeLeadUpdate = "lead_update"
 )
 
 // BroadcastMessage represents a message to be broadcast to clients

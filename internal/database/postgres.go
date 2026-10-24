@@ -116,6 +116,11 @@ func GetMigrationModels() []MigrationModel {
 		{"IVRFlow", &models.IVRFlow{}},
 		{"CallTransfer", &models.CallTransfer{}},
 		{"CallPermission", &models.CallPermission{}},
+
+		// Lead Ads
+		{"LeadSource", &models.LeadSource{}},
+		{"LeadFormMapping", &models.LeadFormMapping{}},
+		{"Lead", &models.Lead{}},
 	}
 }
 

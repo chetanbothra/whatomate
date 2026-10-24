@@ -89,6 +89,9 @@ const WS_TYPE_CONVERSATION_NOTE_CREATED = 'conversation_note_created'
 const WS_TYPE_CONVERSATION_NOTE_UPDATED = 'conversation_note_updated'
 const WS_TYPE_CONVERSATION_NOTE_DELETED = 'conversation_note_deleted'
 
+// Lead Ads types
+const WS_TYPE_LEAD_UPDATE = 'lead_update'
+
 interface WSMessage {
   type: string
   payload: any
@@ -103,7 +106,20 @@ class WebSocketService {
   private isConnected = false
   private hasConnectedBefore = false
   private campaignStatsCallbacks: ((payload: any) => void)[] = []
+  private leadUpdateCallbacks: ((payload: any) => void)[] = []
   private getTokenFn: (() => Promise<string | null>) | null = null
+
+  on(event: string, callback: (payload: any) => void) {
+    if (event === 'lead_update') {
+      this.leadUpdateCallbacks.push(callback)
+    }
+  }
+
+  off(event: string, callback: (payload: any) => void) {
+    if (event === 'lead_update') {
+      this.leadUpdateCallbacks = this.leadUpdateCallbacks.filter(cb => cb !== callback)
+    }
+  }
 
   async connect(getToken?: () => Promise<string | null>) {
     if (this.ws?.readyState === WebSocket.OPEN || this.ws?.readyState === WebSocket.CONNECTING) {
@@ -211,6 +227,11 @@ class WebSocketService {
           break
         case WS_TYPE_CAMPAIGN_STATS_UPDATE:
           this.handleCampaignStatsUpdate(message.payload)
+          break
+        case WS_TYPE_LEAD_UPDATE:
+          this.leadUpdateCallbacks.forEach(cb => {
+            try { cb(message) } catch (e) {}
+          })
           break
         case WS_TYPE_PERMISSIONS_UPDATED:
           this.handlePermissionsUpdated()

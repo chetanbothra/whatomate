@@ -143,6 +143,16 @@ func SLASendOptions() MessageSendOptions {
 	}
 }
 
+// LeadSendOptions returns options suitable for Lead Ads automatic responses
+func LeadSendOptions() MessageSendOptions {
+	return MessageSendOptions{
+		BroadcastWebSocket: true,
+		DispatchWebhook:    true,
+		TrackSLA:           false,
+		Async:              false, // Sync to ensure immediate status update on lead
+	}
+}
+
 // SendOutgoingMessage is the unified method for sending all types of WhatsApp messages.
 // It handles: text, media (image/video/audio/document), interactive (buttons/list/cta_url), and template messages.
 func (a *App) SendOutgoingMessage(ctx context.Context, req OutgoingMessageRequest, opts MessageSendOptions) (*models.Message, error) {

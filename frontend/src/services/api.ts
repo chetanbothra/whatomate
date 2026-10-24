@@ -1711,4 +1711,40 @@ export const rsvpService = {
   exportUrl: (id: string) => `${api.defaults.baseURL}/rsvp-events/${id}/export`,
 };
 
+export const leadSourcesService = {
+  list: () => api.get('/lead-sources'),
+  get: (id: string) => api.get(`/lead-sources/${id}`),
+  create: (data: any) => api.post('/lead-sources', data),
+  update: (id: string, data: any) => api.put(`/lead-sources/${id}`, data),
+  delete: (id: string) => api.delete(`/lead-sources/${id}`),
+  subscribe: (id: string) => api.post(`/lead-sources/${id}/subscribe`),
+  test: (id: string) => api.post(`/lead-sources/${id}/test`),
+  forms: (id: string) => api.get(`/lead-sources/${id}/forms`),
+  sync: (id: string, data: { form_id?: string; since?: string; send?: boolean }) =>
+    api.post(`/lead-sources/${id}/sync`, data),
+  mappings: (id: string) => api.get(`/lead-sources/${id}/mappings`),
+  createMapping: (id: string, data: any) => api.post(`/lead-sources/${id}/mappings`, data),
+  updateMapping: (mappingId: string, data: any) => api.put(`/lead-mappings/${mappingId}`, data),
+  deleteMapping: (mappingId: string) => api.delete(`/lead-mappings/${mappingId}`),
+  preview: (mappingId: string, data?: { lead_id?: string }) => api.post(`/lead-mappings/${mappingId}/preview`, data || {}),
+};
+
+export const leadsService = {
+  list: (params?: {
+    source_id?: string;
+    form_id?: string;
+    status?: string;
+    phone?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+  }) => api.get('/leads', { params }),
+  get: (id: string) => api.get(`/leads/${id}`),
+  retry: (id: string) => api.post(`/leads/${id}/retry`),
+  send: (id: string) => api.post(`/leads/${id}/send`),
+  delete: (id: string, purge?: boolean) => api.delete(`/leads/${id}`, { params: { purge: !!purge } }),
+  stats: () => api.get('/leads/stats'),
+};
+
 export default api;

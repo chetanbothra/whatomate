@@ -297,6 +297,14 @@ func runServer(args []string) {
 	go slaProcessor.Start(slaCtx)
 	lo.Info("SLA processor started")
 
+	// Start Lead processor
+	leadProcessor := handlers.NewLeadProcessor(app, 15*time.Second)
+	leadCtx, leadCancel := context.WithCancel(context.Background())
+	app.LeadProcessor = leadProcessor
+	app.LeadProcessorCancel = leadCancel
+	go leadProcessor.Start(leadCtx)
+	lo.Info("Lead processor started")
+
 	// Start message retention cleanup worker (runs once at startup, then every 24 h)
 	go worker.StartMessageRetentionWorker(db, lo)
 	lo.Info("Message retention worker started")
@@ -355,6 +363,12 @@ func runServer(args []string) {
 	slaCancel()
 	slaProcessor.Stop()
 	lo.Info("SLA processor stopped")
+
+	// Stop Lead processor
+	lo.Info("Stopping Lead processor...")
+	leadCancel()
+	leadProcessor.Stop()
+	lo.Info("Lead processor stopped")
 
 	// Stop workers first
 	if workerCancel != nil {
@@ -544,6 +558,8 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	// Webhook routes (public - for Meta)
 	g.GET("/api/webhook", app.WebhookVerify)
 	g.POST("/api/webhook", app.WebhookHandler)
+	g.GET("/api/webhook/leadgen", app.LeadWebhookVerify)
+	g.POST("/api/webhook/leadgen", app.LeadWebhookHandler)
 	g.GET("/public/campaigns/{id}/media/{filename}", app.ServePublicCampaignMedia)
 	g.GET("/public/flow-media/{filename}", app.ServePublicFlowMedia)
 
@@ -561,7 +577,7 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 		// Skip auth for public routes
 		if path == "/health" || path == "/ready" ||
 			path == "/api/auth/login" || path == "/api/auth/register" || path == "/api/auth/refresh" ||
-			path == "/api/auth/logout" || path == "/api/webhook" || path == "/ws" {
+			path == "/api/auth/logout" || path == "/api/webhook" || path == "/api/webhook/leadgen" || path == "/ws" {
 			return r
 		}
 		// Skip auth for SSO routes (they handle their own auth via state tokens)
@@ -929,6 +945,30 @@ func setupRoutes(g *fastglue.Fastglue, app *handlers.App, lo logf.Logger, basePa
 	g.GET("/api/products/{id}", app.GetCatalogProduct)
 	g.PUT("/api/products/{id}", app.UpdateCatalogProduct)
 	g.DELETE("/api/products/{id}", app.DeleteCatalogProduct)
+
+	// Lead Ads & Sources
+	g.GET("/api/lead-sources", app.ListLeadSources)
+	g.POST("/api/lead-sources", app.CreateLeadSource)
+	g.GET("/api/lead-sources/{id}", app.GetLeadSource)
+	g.PUT("/api/lead-sources/{id}", app.UpdateLeadSource)
+	g.DELETE("/api/lead-sources/{id}", app.DeleteLeadSource)
+	g.POST("/api/lead-sources/{id}/subscribe", app.SubscribeLeadSource)
+	g.POST("/api/lead-sources/{id}/test", app.TestLeadSourceConnection)
+	g.GET("/api/lead-sources/{id}/forms", app.GetLeadSourceForms)
+	g.POST("/api/lead-sources/{id}/sync", app.SyncLeadSource)
+	g.GET("/api/lead-sources/{id}/mappings", app.ListLeadMappings)
+	g.POST("/api/lead-sources/{id}/mappings", app.CreateLeadMapping)
+	g.PUT("/api/lead-mappings/{id}", app.UpdateLeadMapping)
+	g.DELETE("/api/lead-mappings/{id}", app.DeleteLeadMapping)
+	g.POST("/api/lead-mappings/{id}/preview", app.PreviewLeadMapping)
+
+	// Leads Work Queue & Reporting
+	g.GET("/api/leads", app.ListLeads)
+	g.GET("/api/leads/stats", app.GetLeadStats)
+	g.GET("/api/leads/{id}", app.GetLead)
+	g.POST("/api/leads/{id}/retry", app.RetryLead)
+	g.POST("/api/leads/{id}/send", app.SendLeadNow)
+	g.DELETE("/api/leads/{id}", app.DeleteLead)
 
 	// Serve embedded frontend (SPA)
 	if frontend.IsEmbedded() {

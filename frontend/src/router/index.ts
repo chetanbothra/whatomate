@@ -237,6 +237,24 @@ const router = createRouter({
           meta: { permission: 'settings.sso' }
         },
         {
+          path: 'leads',
+          name: 'leads',
+          component: () => import('@/views/LeadsView.vue'),
+          meta: { permission: 'lead_ads' }
+        },
+        {
+          path: 'settings/lead-ads',
+          name: 'lead-sources',
+          component: () => import('@/views/settings/LeadSourcesView.vue'),
+          meta: { permission: 'lead_ads' }
+        },
+        {
+          path: 'settings/lead-ads/:id',
+          name: 'lead-source-detail',
+          component: () => import('@/views/settings/LeadSourceDetailView.vue'),
+          meta: { permission: 'lead_ads' }
+        },
+        {
           path: 'settings/custom-actions',
           name: 'custom-actions',
           component: () => import('@/views/settings/CustomActionsView.vue'),
@@ -298,6 +316,7 @@ const navigationOrder = [
   { path: '/templates', permission: 'templates' },
   { path: '/flows', permission: 'flows.whatsapp' },
   { path: '/campaigns', permission: 'campaigns' },
+  { path: '/leads', permission: 'lead_ads' },
   { path: '/calling/logs', permission: 'call_logs', childPaths: [
     { path: '/calling/logs', permission: 'call_logs' },
     { path: '/calling/ivr-flows', permission: 'ivr_flows' },
@@ -307,6 +326,7 @@ const navigationOrder = [
     { path: '/settings', permission: 'settings.general' },
     { path: '/settings/chatbot', permission: 'settings.chatbot' },
     { path: '/settings/accounts', permission: 'accounts' },
+    { path: '/settings/lead-ads', permission: 'lead_ads' },
     { path: '/settings/canned-responses', permission: 'canned_responses' },
     { path: '/settings/tags', permission: 'tags' },
     { path: '/settings/teams', permission: 'teams' },

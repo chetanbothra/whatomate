@@ -175,6 +175,29 @@ var importConfigs = map[string]ImportConfig{
 		OptionalColumns: []string{"color", "description"},
 		UniqueColumn:    "name",
 	},
+	"leads": {
+		Model:    &models.Lead{},
+		Resource: "lead_ads",
+		AllowedColumns: []string{
+			"leadgen_id", "page_id", "form_id", "ad_name", "campaign_name",
+			"platform", "name", "phone", "email", "status", "lead_created_at", "created_at",
+		},
+		DefaultColumns: []string{"name", "phone", "email", "status", "form_id", "lead_created_at"},
+		ColumnLabels: map[string]string{
+			"leadgen_id":      "Leadgen ID",
+			"page_id":         "Page ID",
+			"form_id":         "Form ID",
+			"ad_name":         "Ad Name",
+			"campaign_name":   "Campaign Name",
+			"platform":        "Platform",
+			"name":            "Name",
+			"phone":           "Phone",
+			"email":           "Email",
+			"status":          "Status",
+			"lead_created_at": "Lead Created At",
+			"created_at":      "Received At",
+		},
+	},
 }
 
 // ExportRequest represents an export request

@@ -204,6 +204,23 @@ const (
 	WebhookEventTransferCreated  WebhookEvent = "transfer.created"
 	WebhookEventTransferResumed  WebhookEvent = "transfer.resumed"
 	WebhookEventTransferAssigned WebhookEvent = "transfer.assigned"
+	WebhookEventLeadReceived     WebhookEvent = "lead.received"
+	WebhookEventLeadSent         WebhookEvent = "lead.sent"
+)
+
+// Lead status constants
+const (
+	StatusLeadReceived           = "received"
+	StatusLeadFetched            = "fetched"
+	StatusLeadRetry              = "retry"
+	StatusLeadSent               = "sent"
+	StatusLeadStored             = "stored"
+	StatusLeadSkippedDuplicate   = "skipped_duplicate"
+	StatusLeadSkippedNoMapping   = "skipped_no_mapping"
+	StatusLeadSkippedInvalidPhone = "skipped_invalid_phone"
+	StatusLeadSkippedOptedOut    = "skipped_opted_out"
+	StatusLeadSkippedNoConsent   = "skipped_no_consent"
+	StatusLeadFailed             = "failed"
 )
 
 // ActionType represents custom action types
