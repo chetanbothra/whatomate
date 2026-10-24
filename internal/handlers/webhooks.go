@@ -114,6 +114,8 @@ var AvailableWebhookEvents = []map[string]string{
 	{"value": string(models.WebhookEventTransferCreated), "label": "Transfer Created", "description": "When a transfer to human agent is requested"},
 	{"value": string(models.WebhookEventTransferAssigned), "label": "Transfer Assigned", "description": "When a transfer is assigned to an agent"},
 	{"value": string(models.WebhookEventTransferResumed), "label": "Transfer Resumed", "description": "When chatbot is resumed (transfer closed)"},
+	{"value": string(models.WebhookEventLeadReceived), "label": "Lead Received", "description": "When a Meta lead ad form submission is received and fetched"},
+	{"value": string(models.WebhookEventLeadSent), "label": "Lead Sent", "description": "When an auto-response template is accepted for a lead"},
 }
 
 // ListWebhooks returns all webhooks for the organization

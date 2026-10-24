@@ -110,6 +110,12 @@ export const navigationItems: NavItem[] = [
     permission: 'rsvp'
   },
   {
+    name: 'nav.leads',
+    path: '/leads',
+    icon: Users,
+    permission: 'lead_ads'
+  },
+  {
     name: 'nav.calling',
     path: '/calling',
     icon: Phone,
@@ -126,11 +132,12 @@ export const navigationItems: NavItem[] = [
     path: '/settings',
     icon: Settings,
     permission: 'settings.general',
-    childPermissions: ['settings.general', 'settings.chatbot', 'accounts', 'contacts', 'canned_responses', 'tags', 'teams', 'users', 'roles', 'api_keys', 'webhooks', 'custom_actions', 'settings.sso'],
+    childPermissions: ['settings.general', 'settings.chatbot', 'accounts', 'lead_ads', 'contacts', 'canned_responses', 'tags', 'teams', 'users', 'roles', 'api_keys', 'webhooks', 'custom_actions', 'settings.sso'],
     children: [
       { name: 'nav.general', path: '/settings', icon: Settings, permission: 'settings.general' },
       { name: 'nav.chatbot', path: '/settings/chatbot', icon: Bot, permission: 'settings.chatbot' },
       { name: 'nav.accounts', path: '/settings/accounts', icon: Users, permission: 'accounts' },
+      { name: 'nav.leadAds', path: '/settings/lead-ads', icon: Megaphone, permission: 'lead_ads' },
       { name: 'nav.cannedResponses', path: '/settings/canned-responses', icon: MessageSquareText, permission: 'canned_responses' },
       { name: 'nav.tags', path: '/settings/tags', icon: Tags, permission: 'tags' },
       { name: 'nav.teams', path: '/settings/teams', icon: Users, permission: 'teams' },

@@ -264,6 +264,60 @@ func (a *App) InvalidateWhatsAppAccountCache(phoneID string) {
 	a.Redis.Del(ctx, cacheKey)
 }
 
+type leadSourceCache struct {
+	models.LeadSource
+	PageAccessToken string `json:"page_access_token"`
+	AppSecret       string `json:"app_secret"`
+}
+
+const (
+	leadSourceCachePrefix = "lead:source:"
+	leadSourceCacheTTL    = 6 * time.Hour
+)
+
+// getLeadSourceCached retrieves LeadSource by pageID from cache or database
+func (a *App) getLeadSourceCached(pageID string) (*models.LeadSource, error) {
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("%s%s", leadSourceCachePrefix, pageID)
+
+	// Try cache first
+	cached, err := a.Redis.Get(ctx, cacheKey).Result()
+	if err == nil && cached != "" {
+		var cacheData leadSourceCache
+		if err := json.Unmarshal([]byte(cached), &cacheData); err == nil {
+			cacheData.LeadSource.PageAccessToken = cacheData.PageAccessToken
+			cacheData.LeadSource.AppSecret = cacheData.AppSecret
+			cacheData.LeadSource.DecryptSecrets(a.Config.App.EncryptionKey)
+			return &cacheData.LeadSource, nil
+		}
+	}
+
+	// Cache miss - fetch from DB
+	var source models.LeadSource
+	if err := a.DB.Where("page_id = ?", pageID).First(&source).Error; err != nil {
+		return nil, err
+	}
+
+	cacheData := leadSourceCache{
+		LeadSource:      source,
+		PageAccessToken: source.PageAccessToken,
+		AppSecret:       source.AppSecret,
+	}
+	if data, err := json.Marshal(cacheData); err == nil {
+		a.Redis.Set(ctx, cacheKey, data, leadSourceCacheTTL)
+	}
+
+	source.DecryptSecrets(a.Config.App.EncryptionKey)
+	return &source, nil
+}
+
+// InvalidateLeadSourceCache clears cache for a pageID
+func (a *App) InvalidateLeadSourceCache(pageID string) {
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("%s%s", leadSourceCachePrefix, pageID)
+	a.Redis.Del(ctx, cacheKey)
+}
+
 // getWebhooksCached retrieves active webhooks for an organization from cache or database
 func (a *App) getWebhooksCached(orgID uuid.UUID) ([]models.Webhook, error) {
 	ctx := context.Background()
